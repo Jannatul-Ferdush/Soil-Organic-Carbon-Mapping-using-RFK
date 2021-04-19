@@ -1,0 +1,453 @@
+---
+title: "Mapping of Covariates"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+We assembled a comprehensive set of spatial environmental data to characterize the region and used these data to predict soil properties throughout the study region.
+
+### Load packages
+
+```{r}
+library(raster)
+library(gstat)
+library(RColorBrewer)
+library(classInt)
+library(maptools)
+library(latticeExtra)
+library(rgdal)
+library(plyr)
+```
+
+### Set working directory
+
+```{r}
+setwd("D:\\SOC_paper\\Data")
+dir ()
+```
+
+### Load data
+
+```{r}
+grid<-read.csv("GOPAL_GRID_ALL.csv",header=TRUE)        # grid data
+data<-read.csv("GOPAL_SOIL.csv",header=TRUE)            # all data
+bound<-readShapePoly("GOPAL_BD.shp")                    # District boundary 
+polys<- list("sp.lines", as(bound, "SpatialLines"), col="black", lwd=.8,lty=1)
+AEZ_ID<-read.csv("AEZ_ID.csv", header=TRUE)
+LT_ID<-read.csv("LT_ID.csv", header=TRUE)
+AEZ_ID<-read.csv("AEZ_ID.csv", header=TRUE)
+DC_ID<-read.csv("DC_ID.csv", header=TRUE)
+SP_ID<-read.csv("SP_ID.csv", header=TRUE)
+GEO_ID<-read.csv("GEO_ID.csv", header=TRUE)
+LU_ID<-read.csv("LU_ID.csv", header=TRUE)
+names(grid)
+```
+
+
+### Create spatial point data frame
+
+```{r}
+coordinates(grid)<-~x+y
+gridded(grid)<-TRUE
+grid.df<- as.data.frame(grid)
+```
+
+
+## 1. Elevation (DEM)
+
+We used publicly available 1-sec arc (30 m) Shuttle Radar Topography Mission (SRTM) DEM derived from InSAR sensor of the space shuttle Endeavor (USGS, 2015).The 30m DEM data was then re-sampled to a 250 m grid  
+
+USGS, 2015. https://lta.cr.usgs.gov/srtm/mission_summary 
+
+
+#### Surmmary Statistics - DEM
+
+```{r}
+summary(grid$DEM)
+```
+
+#### Plot- DEM
+
+```{r}
+summary(grid$DEM)
+rgb.palette.elev <- colorRampPalette(c("blue", "green", "yellow","orange","red"))
+dem<-spplot(grid,"DEM", main = "",
+   sp.layout=list(polys),
+   par.settings=list(axis.line=list(col="darkgrey",lwd=1)),
+   colorkey=list(space="right",height=1, width=1.3,labels=list(cex=1.5)),
+   col.regions=rgb.palette.elev (100))
+
+windows(width=6.5, height=4.5)
+tiff( file="FIG_DEM.tif",
+width=6.5, height=4.5,units = "in",pointsize = 12, res=900, 
+restoreConsole = T,compression =  "lzw",bg="transparent")
+print(dem)
+dev.off()
+dem
+```
+
+
+## 2.Normalized Difference Vegetation Index (NDVI) 
+
+The 250 m spatial resolution NDVI data from the months of January to April of the year 2000 to 2011, derived from the Moderate-Resolution Imaging Spectro-radiometer (MODIS) Bands 1 (red) and 2 (near infrared), were obtained from the NASA Land Processes Distributed Active Archive Center (LP DAAC), USGS/Earth Resources Observation and Science (EROS) Center, Sioux Falls, South Dakota (accessed at https://lpdaac.usgs.gov/get_data). 
+
+
+
+#### Summary Statistics - NDVI
+
+```{r}
+summary(grid$NDVI)
+```
+
+#### Plot - NDVI
+
+```{r}
+rgb.palette.ndvi <- colorRampPalette(c("red", "orange", "yellow", "green"))
+ndvi<-spplot(grid,"NDVI", main = "",
+   sp.layout=list(polys),
+   par.settings=list(axis.line=list(col="darkgrey",lwd=1)),
+   colorkey=list(space="right",height=1, width=1.3,labels=list(cex=1.5)),
+   col.regions=rgb.palette.ndvi (100))
+
+windows(width=6.5, height=4.5)
+tiff( file="FIG_NDVI.tif",
+width=6.5, height=4.5,units = "in",pointsize = 12, res=900, 
+restoreConsole = T,compression =  "lzw",bg="transparent")
+print(ndvi)
+dev.off()
+ndvi
+```
+
+## 3. Agroecological zone (AEZ)
+
+Bangladesh is a small country, but highly diverse in terms of land and soil type, physiography, agroecology, cropping patterns and farm management, with 30 agroecological zones (AEZ). Each AEZ is an area with broadly similar climatic, soil and hydrological conditions which enable similar crops and management practices to be used, though within each AEZ there remains considerable variability in the biophysical and anthropogenic factors (UNDP/FAO, 1988). The shape file of AEZ was obtained from Bangladesh Agricultural Research Council (BARC, 2016). This shape file was converted to 250 m raster grid and then clipped with Gopalganj district boundary. The AEZ information at all SRDI soil sampling location were extracted from AEZ raster grid. 
+
+Brammer H. Floods in Bangladesh: geographical background to the 1987 and 1988 floods. Geogr J 1999;156:12-22
+
+BARC. Soil data. 2016. Bangladesh Agricultural Research Council.http://maps.barcapps.gov.bd/index.php?t=shape_file 
+
+UNDP/FAO. Land Resources Appraisal of Bangladesh for Agricultural Development. Report 3.1988. Land resource data base. Volume II Soil, Landform and Hydrological data base.1988. United Nations Development Program. Food and Agriculture Organization in the United Nation. Rome.    
+
+
+```{r}
+AEZ_ID
+```
+
+
+#### Plot- AEZ
+
+```{r}
+rgb.palette.aez <- colorRampPalette(c("grey",  "green", "chocolate", "cyan","yellow", "red","blue"))
+aez<-spplot(grid,"AEZ_ID", main = "",
+   sp.layout=list(polys),
+   par.settings=list(axis.line=list(col="darkgrey",lwd=1)),
+   colorkey = list(space="right",tick.number=1,height=1, width=1.5,
+   labels = list(at = seq(0.2,6,length=7),cex=1.0,
+   lab = c("No-data", "Gopalganj-Khulna Bils (AEZ14)", 
+           "High Ganges River Floodplain (AEZ11)", 
+           "Low Ganges River Floodplain (AEZ12)", 
+           "Old Meghna Estuarine Floodplain (AEZ19)", 
+           "Urban", 
+           "Water" ))),
+   col.regions=rgb.palette.aez,cut=6)
+
+windows(width=6.5, height=4.5)
+tiff( file="FIG_AEZ.tif",
+width=6.5,height=4.5,units = "in",pointsize = 12, res=900, 
+restoreConsole = T,compression =  "lzw",bg="transparent")
+print(aez)
+dev.off()
+aez
+```
+
+### Area- AEZ
+
+```{r}
+grid.df$AEZ_ID <- as.factor(grid.df$AEZ_ID)
+aez.area<-ddply(grid.df,~AEZ_ID,summarise,Area_ha=length(x)*250*250/10000)
+aez.df <- cbind(AEZ_ID,aez.area) 
+drops <- c("AEZ_ID","AEZ_ID")
+aez.area <-aez.df[ , !(names(aez.df) %in% drops)]
+write.csv(aez.area, "AEZ_AREA.CSV")
+aez.area
+```
+
+
+## 4. Surface Geology (GEO)
+
+The shape file of  surface geology of Bangladesh was obtained from United State Geological Survey (USGS, 2016) and then converted to 250 m raster grid. 
+
+
+USGS, United State Geological Survey. 2016. https://pubs.usgs.gov/of/1997/ofr-97-470/OF97-470H/linked_filepaths1.htm
+
+
+```{r}
+GEO_ID
+```
+
+#### Plot-  Surface Geology
+
+```{r}
+rgb.palette.geo <- colorRampPalette(c("grey","chocolate", "yellow", "cyan","blue"))
+geo<-spplot(grid,"GEO_ID", main = "",
+   sp.layout=list(polys),
+   par.settings=list(axis.line=list(col="darkgrey",lwd=1)),
+   colorkey = list(space="right",tick.number=1,height=1, width=1.5,
+   labels = list(at = seq(0.2,4,length=5),cex=1.0,
+   lab = c("No-data", 
+           "Deltaic silt", 
+           "Marsh clay and peat", 
+           "Tidal deltaic deposits", 
+           "Water"))),
+   col.regions=rgb.palette.geo,cut=4)
+
+windows(width=4.5, height=4.5)
+tiff( file="FIG_GEO.tif",
+width=6.5,height=4.5,units = "in",pointsize = 12, res=900, 
+restoreConsole = T,compression =  "lzw",bg="transparent")
+print(geo)
+dev.off()
+geo
+```
+
+#### Area under Surface Geology
+
+```{r}
+grid.df$GEO_ID<- as.factor(grid$GEO_ID)
+GEO.area<-ddply(grid.df,~GEO_ID,summarise,Area_ha=length(x)*250*250/10000)
+GEO.df <- cbind(GEO_ID,GEO.area) 
+drops <- c("ID","GEO_ID","GEO_ID")
+GEO.area<-GEO.df[ , !(names(GEO.df) %in% drops)]
+GEO.area
+write.csv(GEO.area,"GEO_Area.csv")
+```
+
+
+## 5. Flooding Landtype
+
+Six main hydrological land types are recognized in Bangladesh. Each of them is related to a specific range of inundation depth during the Kharif (rainy) season. Some land types are further subdivided depending on whether or not they remain wet throughout the Rabi (dry) season (Barmmer, 1999).The shape file of flood land type was obtained from BARC and processed to 250 m raster grid.   
+
+Six basic hydrological land types are recognized in Bangladesh, each related to a specific range of inundation depths during the Kharif season (UNDP/FAO, 1988).These are: land not normally inundated (Highland), normal inundation less than 30 cm (Medium Highland 1), normal inundation in the range 30-90 cm (Medium Highland 2), normal inundation in the range 90-180 cm (Medium Lowland), normal inundation in the range 180-300 cm (Lowland) and normal inundation deeper than 300 cm (Very Lowland).
+
+
+Brammer H. Floods in Bangladesh: geographical background to the 1987 and 1988 floods. Geogr J 1999;156:12-22
+
+```{r}
+LT_ID
+```
+
+
+#### Plot Landtype map
+
+```{r}
+rgb.palette.lt <- colorRampPalette(c("grey", "red", "chocolate", "yellow", "orange","cyan","blue"))
+lt<-spplot(grid,"LT_ID", main = "",
+   sp.layout=list(polys),
+   par.settings=list(axis.line=list(col="darkgrey",lwd=1)),
+   colorkey = list(space="right",tick.number=1,height=1, width=1.5,
+   labels = list(at = seq(0.2,6,length=7),cex=1.0,
+   lab = c("No-data", 
+           "Higland", 
+           "Medium Highland-1", 
+           "Medium Highland-2", 
+           "Medium Lowland", 
+           "Lowland", 
+           "Very Lowland"))),
+   col.regions=rgb.palette.lt,cut=6)
+
+windows(width=6.5, height=4.5)
+tiff( file="FIG_LT.tif",
+width=6.5,height=4.5, units = "in",pointsize = 12, res=900, 
+restoreConsole = T,compression =  "lzw",bg="transparent")
+print(lt)
+dev.off()
+lt
+```
+
+#### Area under each Landtype
+
+```{r}
+grid.df$LT_ID<- as.factor(grid$LT_ID)
+lt.area<-ddply(grid.df,~LT_ID,summarise,Area_ha=length(x)*250*250/10000)
+lt.df <- cbind(LT_ID,lt.area) 
+drops <- c("ID","LT_ID","LT_ID")
+lt.area<-lt.df[ , !(names(lt.df) %in% drops)]
+lt.area
+write.csv(lt.area, "LT_Area.csv")
+```
+
+##  6. Landuse 
+
+Landsat 5 Thematic Mapper (TM) with 30 m spatial resolution multi-spectral images were used for land use classification of the study area. These images were acquired in January and March in 1989 and downloaded from USGS Earth Resources Observation and Science (EROS). The atmospheric corrected surface reflectance of Path 137 and Row 44 was in this study. A subsets of the original scenes covering the Gopalganj was selected for classification.
+In order to train each classifier, we selected six classes: (1) Rabi crop, (2) Fallow, (3) Boro rice, (4) Developed, (5) Rural settlement/homestead vegetation and (6) River/open-water. Training data set was randomly split into calibration data (70% of data)and validation data (30% of data). The classifiers were trained with Random Forest regression model using the calibration samples and reflectance data for bands 1 through 7, NDVI, EVI and 30 m SRTM DEM data. The accuracy of classification was evaluated with validation data set. RandomForests (Liaw and Wiener, 2002) package in the R statistical computing environment [R Core Team, 2016] was used for image classification. The study area was The  initially classified results were reclassified into five  major classes (Figure 2). The final 30 m spatial resolution landuse map was resampled to 250 m resolution. Then all soil sampling locations were characterized according to the landuse map.  
+
+EROS (2016).USGS Earth Resources Observation and Science.  (https://espa.cr.usgs.gov/).
+
+Liaw, A., and M. Wiener (2002) Classification and regression by randomForest. R News 2(3), 18-22. Online: http://CRAN.R-project.org/doc/Rnews. Verified: August 18.
+
+R Core Team (2016), R: A language and environment for statistical computing. R Foundation for Statistical Computing, http://www.R-project.org, Vienna, Austria. 
+
+
+```{r}
+LU_ID
+```
+
+#### Plot-  Landuse
+
+```{r}
+rgb.palette.lu <- colorRampPalette(c("red", "green", "yellow","green4", "blue"))
+lu<-spplot(grid,"LU_ID", main = "",
+   sp.layout=list(polys),
+   par.settings=list(axis.line=list(col="darkgrey",lwd=1)),
+   colorkey = list(space="right",tick.number=1,height=1, width=1.5,
+   labels = list(at = seq(0.2,5,length=6),cex=1.0,
+   lab = c("Others", 
+           "Cropland-rabi", 
+           "Fallow", 
+           "Cropland-boro", 
+           "River/open water"))),
+   col.regions=rgb.palette.lu,cut=4)
+
+windows(width=6.5, height=4.5)
+tiff( file="FIG_LU.tif",
+width=6.5,height=4.5,units = "in",pointsize = 12, res=900, 
+restoreConsole = T,compression =  "lzw",bg="transparent")
+print(lu)
+dev.off()
+lu
+```
+
+#### Area- Landuse
+
+```{r}
+grid.df$LU_ID<- as.factor(grid$LU_ID)
+LU.area<-ddply(grid.df,~LU_ID,summarise,Area_ha=length(x)*250*250/10000)
+LU.df <- cbind(LU_ID,LU.area) 
+drops <- c("LU_ID","LU_ID")
+LU.area<-LU.df[ , !(names(LU.df) %in% drops)]
+LU.area
+write.csv(LU.area, "LU_Area.csv")
+```
+
+
+## 7. Drainage Class
+
+Like AEZ map, the shape file of drainage class map obtained from BARC (2016). Processed to 250 m raster grid. The drainage classes are the same as those used to describe soils in the  field. Poorly drained soils have been subdivided into early/normal (drains before Nov 15) and late  (drains after Nov 15) raining soil phases respectively (UNDP/FAO, 1985). The definitions of the drainage classes are as follows:
+
+Class1 Well-drained:  Water stands on the surface for not more than a few hours and the soil does not remain saturated for more than 2-3 days after heavy rainfall.
+
+Class 2 Moderately well-drained: Water remains on the soil surface for a few days following heavy rainfall and the soil may remain wet for up to two weeks at a time during the monsoon season.
+
+Class 3 Imperfectly drained: The soil remains wet for several weeks during the monsoon season and water may stand on the surface for up to two weeks at a time following periods of heavy monsoon rainfall.
+
+Class 4 Poorly drained early: The soil remains wet for several weeks during the monsoon
+season 	and is flooded for more than two weeks but not for the whole year. Surface Drains Early < 15 Nov. 
+
+Class 5 Poorly drained early: The soil remains wet for several weeks during the monsoon
+season 	and is flooded for more than two weeks but not for the whole year. Surface drains early > 15 Nov. 
+
+Class 5 Very poorly drained: The soil remains wet throughout the year.
+
+FAO/UNDP. 1985. Soil-Crop Suitability Classification for Bangladesh. 2nd Edition. FAO/UNDP Agricultural Advise Project (BDG/81/035). Agriculture and Forest Division. Ministry of Agriculture. 
+
+
+
+```{r}
+DC_ID
+```
+
+#### Plot - Drainage class
+
+```{r}
+rgb.palette.dc <- colorRampPalette(c("grey","chocolate", "yellow", "orange","cyan","blue"))
+dc<-spplot(grid,"DC_ID", main = "",
+   sp.layout=list(polys),
+   par.settings=list(axis.line=list(col="darkgrey",lwd=1)),
+   colorkey = list(space="right",tick.number=1,height=1, width=1.5,
+   labels = list(at = seq(0.2,6,length=7),cex=1.0,
+   lab = c("No-data", 
+           "Mixed Poorly Drained", 
+           "Mixed Very Poorly Drained", 
+           "Mostly Poorly Drained", 
+           "Poorly Drained", 
+           "Very Poorly Drained"))),
+   col.regions=rgb.palette.dc,cut=5)
+
+windows(width=6.5, height=6.5)
+tiff( file="FIG_DC.tif",
+width=6.5, height=6.5,units = "in",pointsize = 12, res=900, 
+restoreConsole = T,compression =  "lzw",bg="transparent")
+print(dc)
+dev.off()
+dc
+```
+
+#### Area- Drainage class
+
+```{r}
+grid.df$DC_ID<- as.factor(grid$DC_ID)
+dc.area<-ddply(grid.df,~DC_ID,summarise,Area_ha=length(x)*250*250/10000)
+dc.df <- cbind(DC_ID,dc.area) 
+drops <- c("ID","DC_ID","DC_ID")
+dc.area<-dc.df[ , !(names(dc.df) %in% drops)]
+dc.area
+write.csv(dc.area, "DC_Area.csv")
+```
+
+
+## 8. Soil permeability
+
+Together with the drainage and inundation factors, permeability determines the availability of oxygen in the root zone. Removal of excess moisture from the soil surface and the soil profile depends mainly on the rate of permeability and the position of the soil in the landscape.Soil permeability is a characteristic property of soil, and studying it helps to erect better structures, construct stable foundations, and perform agricultural activities. Three general class of permeability area (FAO/UNDP, 1985): 
+
+Class 1	Rapid	> 305 cm/day
+Class 2	Moderate	12 - 305 cm/day
+Class 3	Slow	<12 cm/day
+
+FAO/UNDP. 1985. Soil-Crop Suitability Classification for Bangladesh. 2nd Edition. FAO/UNDP Agricultural Advise Project (BDG/81/035). Agriculture and Forest Division. Ministry of Agriculture. 
+
+```{r}
+SP_ID
+```
+
+#### Plot - Soil Permiability 
+
+```{r}
+rgb.palette.sp <- colorRampPalette(c("grey","chocolate", "yellow", "orange","cyan","blue"))
+sp<-spplot(grid,"SP_ID", main = "",
+   sp.layout=list(polys),
+   par.settings=list(axis.line=list(col="darkgrey",lwd=1)),
+   colorkey = list(space="right",tick.number=1,height=1, width=1.5,
+   labels = list(at = seq(0.2,6,length=7),cex=1.0,
+   lab = c("No-data", 
+           "Mixed Moderate & Slow", 
+           "Moderate", 
+           "Mostly Moderate", 
+           "Mostly Slow", 
+           "Slow"))),
+   col.regions=rgb.palette.sp,cut=5)
+
+windows(width=6.5, height=4.5)
+tiff( file="FIG_SP.tif",
+width=6.5,height=4.5,units = "in",pointsize = 12, res=900, 
+restoreConsole = T,compression =  "lzw",bg="transparent")
+print(sp)
+dev.off()
+sp
+```
+
+#### Area - Permiability 
+
+```{r}
+grid.df$SP_ID<- as.factor(grid$SP_ID)
+sp.area<-ddply(grid.df,~SP_ID,summarise,Area_ha=length(x)*250*250/10000)
+sp.df <- cbind(SP_ID,sp.area) 
+drops <- c("ID","SP_ID","SP_ID")
+sp.area<-sp.df[ , !(names(sp.df) %in% drops)]
+sp.area
+write.csv(sp.area,"write.csv")
+```
+
+
+

@@ -1,0 +1,533 @@
+---
+title: "Data Transformation and Spatial Distribution of SOC"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+### Normal Score Transformation:
+
+Prior to statistical  and geostatistical analysis, the data of SOC were tested for normality by Shapiro-Wilk normality test.  We used normal score transformation to full fill multi-Guassian assumption necessary for geostatistical analysis. 
+
+
+## Load packages
+
+```{r}
+library(plyr)
+library(dplyr)
+library(raster)
+library(agricolae)
+library(plyr)
+library(ggplot2)
+library(maptools)
+library(gstat)
+library(RColorBrewer)
+library(classInt)
+library(latticeExtra)
+library(sp)
+```
+
+### Set working directory
+
+```{r}
+setwd("D:\\SOC_paper\\Data")
+dir ()
+```
+
+### Load data
+
+```{r}
+mf<-read.csv("GOPAL_SOIL.csv",header=TRUE)          # All data
+bound<-readShapePoly("GOPAL_BD.shp")                # District boundary 
+names(mf)
+```
+
+### Data transformation
+
+```{r}
+source("nscore.R")
+SOC.ns <- nscore(mf$SOC)
+mf$SOC.ns<- SOC.ns$nscore
+```
+
+### Shapiro-Wilk test of normality
+
+```{r}
+shapiro.test(mf$SOC)
+shapiro.test(mf$SOC.ns)
+```
+
+### Histogram SOC and SOC.ns
+
+```{r}
+hist (mf$SOC)
+hist (mf$SOC.ns)
+```
+
+### Import  As TIF file
+
+#### Histogram: Soil OC (SOC)
+
+```{r}
+windows(width=3.25, height=3.25)
+tiff(file="FIG_SOC_HISTO.tif", 
+     width=3.25, 
+     height=3.25, 
+     units = "in", 
+     pointsize = 12, 
+     res=600, 
+     bg = "white",
+     restoreConsole = T,
+     compression =  "lzw")
+hist(mf$SOC, main="", 
+     xlab= "", 
+     ylab="",
+     cex.main=2.5)
+dev.off()
+```
+
+#### Histogram: Normal Score Transformed (SOC.ns)
+
+```{r}
+windows(width=3.25, height=3.25)
+tiff(file="FIG_SOC_ns_HISTO.tif", 
+     width=3.25, 
+     height=3.25, 
+     units = "in", 
+     pointsize = 12, 
+     res=600, 
+     bg = "white",
+     restoreConsole = T,
+     compression =  "lzw")
+hist(mf$SOC.ns, main="", 
+     xlab= " ", 
+     ylab="",
+     cex.main=2.5)
+dev.off()
+```
+
+## Create Calibration and Validation Data Set
+
+```{r}
+# proportion of full dataset to use for training (70%)
+tr_prop = 0.70
+# training data
+mfC = ddply(mf, .(AEZ,GEO,LT,SP),
+    function(., seed) { set.seed(seed); .[sample(1:nrow(.), trunc(nrow(.) * tr_prop)), ] }, seed = 101)   #calibration dataset
+# Validation data (30% of data)
+mfV = ddply(mf,  .(AEZ,GEO,LT,SP), 
+    function(., seed) { set.seed(seed); .[-sample(1:nrow(.), trunc(nrow(.) * tr_prop)), ] }, seed = 101)  #validation dataset
+write.csv(mfV, "GOPAL_Validation.csv")
+write.csv(mfC, "GOPAL_Calibration.csv")
+```
+
+### Desciptive Statistics
+
+#### Desciptive Statistics: All data
+
+```{r}
+length(mf$SOC)                # Number of observation
+summary(mf$SOC)               # Summary stat
+sd(mf$SOC)                    # Standard deviation
+skewness(mf$SOC)              # skewness
+sd(mf$SOC)*100/mean(mf$SOC)   # CV 
+```
+
+
+#### Desciptive Statistics: Calibration data
+
+```{r}
+length(mfC$SOC)                  # Number of observation
+summary(mfC$SOC)                 # Summary stat
+sd(mfC$SOC)                      # Standard deviation
+skewness(mfC$SOC)                # Skewness
+sd(mfC$SOC)*100/mean(mfC$SOC)    # CV 
+```
+
+#### Desciptive Statistics: Validation data
+
+```{r}
+length(mfV$SOC)                 # Number of observation
+summary(mfV$SOC)                # Summary stat
+sd(mfV$SOC)                     # Standard deviation
+skewness(mfV$SOC)               # Skewness
+sd(mfV$SOC)*100/mean(mfV$SOC)   # CV 
+```
+
+### Maps Observed SOC with Calibartion and Validation data 
+
+```{r}
+coordinates(mfV)<-~x+y
+at.soc = classIntervals(mf$SOC, n = 10, style = "quantile")$brks
+round(quantile(mf$SOC, probs=seq(0,1, by=0.1)),1)
+rgb.palette.col <- colorRampPalette(c("red","yellow", "green", "blue"),space = "rgb")
+
+soc<-levelplot(SOC~x+y, mf,cex=0.6,
+              aspect = "iso",main= "",
+              xlab="", ylab="",
+              xlim=c(773500, 825400),ylim=c(2525000,2586000 ),
+              scales=list(y=list(draw=T,cex=0.5,rot=90, tck= 0.5),x=list(draw=T, cex=0.5,tck= 0.6)),
+              par.settings=list(axis.line=list(col="grey",lwd=0.5)),
+              col.regions=rgb.palette.col (20),at=at.soc,
+              colorkey=list(space="right",width=1.2,at=1:11,labels=list(cex=1.2,at=1:11,
+              labels=c("" ,"<1.2", "", "1.8" ,"", "2.6","", "4.2", "" , ">7.8", ""))),
+              panel = function(...) {
+              panel.levelplot.points(...)
+              sp.points(mfV, col="black", cex=1.0,pch=21)
+              sp.polygons(bound,lty=1,lwd=0.5,col="grey30")
+              },) 
+
+windows(width=5, height=5)
+tiff(file="FIG_SOC_OBSERVED.tif", 
+width=5, height=5,units = "in", pointsize = 12, res=1600,
+restoreConsole = T,bg="transparent")
+print(soc)
+dev.off()
+soc
+```
+
+
+## Distribution of SOC in  AEZs
+
+#### AEZ mean
+
+```{r}
+aez.stat<-ddply(mf, "AEZ", summarise,
+      N=length(SOC), Mean = mean(SOC), SD = sd(SOC), Min=min(SOC),Max=max(SOC))
+aez.stat
+write.csv(aez.stat, "AEZ_STAT.csv")
+```
+
+#### AEZ:  ANOVA 
+
+```{r}
+aez<-aov(SOC~AEZ, mf)
+summary(aez)
+```
+
+#### AEZ: LSD test
+
+```{r}
+LSD.test(aez, "AEZ",console=TRUE)
+```
+
+#### AEZ: Boxplot
+
+```{r}
+windows(width=7.5, height=5)
+tiff( file="FIG_BOX_PLOT_SOC_AEZ.tif", 
+width=7.5, height=5,units = "in", pointsize = 12, res=300, bg = "transparent",
+restoreConsole = TRUE)
+rgb.palette <- colorRampPalette(c("red","yellow","green", "blue", "skyblue"),
+space = "rgb")
+
+p=ggplot(mf, aes(y=SOC, x=AEZ)) +
+         geom_point(aes(colour=SOC),size = I(2.0),
+         position=position_jitter(width=0.05, height=0.05)) +
+         geom_boxplot(fill=NA, outlier.colour=NA) +
+         labs(title="")+
+         theme_bw() +
+         coord_flip()+
+            theme(axis.line = element_line(colour = "black"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.background = element_blank(),
+            axis.text.y=element_text(size=10),
+            axis.text.x = element_text(size=12))
+p1= p+scale_colour_gradientn(name="Soil OC \n(%)", colours =rgb.palette(20),na.value = "transparent")
+p2=p1 + theme(legend.text = element_text(size = 10),legend.title = element_text(size = 12))
+p2+ labs(y="Soil OC(%)", x = "")
+dev.off()
+p2+ labs(y="Soil OC(%)", x = "")
+```
+
+
+## Distribution of SOC by  Surface geology
+
+#### GEO: descriptive stat
+
+```{r}
+geo.stat<-ddply(mf, "GEO", summarise,
+      N=length(SOC), Mean = mean(SOC), SD = sd(SOC), Min=min(SOC),Max=max(SOC))
+geo.stat
+write.csv(geo.stat, "GEO_STAT.csv")
+```
+
+#### GEO: ANOVA 
+
+```{r}
+geo <- aov(SOC~GEO, mf)
+summary(geo)
+```
+
+#### GEO: LSD test
+
+```{r}
+LSD.test(geo, "GEO",console=TRUE)
+```
+
+#### GEO: Boxplot
+
+```{r}
+windows(width=7.5, height=5)
+tiff( file="FIG_BOX_PLOT_SOC_GEO.tif", 
+width=7.5, height=5,units = "in", pointsize = 12, res=300, bg = "transparent",
+restoreConsole = TRUE)
+rgb.palette <- colorRampPalette(c("red","yellow","green", "blue", "skyblue"),
+space = "rgb")
+
+p=ggplot(mf, aes(y=SOC, x=GEO)) +
+         geom_point(aes(colour=SOC),size = I(2.0),
+         position=position_jitter(width=0.05, height=0.05)) +
+         geom_boxplot(fill=NA, outlier.colour=NA) +
+         labs(title="")+
+         theme_bw() +
+         coord_flip()+
+            theme(axis.line = element_line(colour = "black"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.background = element_blank(),
+            axis.text.y=element_text(size=10),
+            axis.text.x = element_text(size=12))
+p1= p+scale_colour_gradientn(name="Soil OC \n(%)", colours =rgb.palette(20),na.value = "transparent")
+p2=p1 + theme(legend.text = element_text(size = 10),legend.title = element_text(size = 12))
+p2+ labs(y="Soil OC(%)", x = "")
+dev.off()
+p2+ labs(y="Soil OC(%)", x = "")
+```
+
+
+## Distribution of SOC by  landtype
+
+#### Landtype: descriptive stat
+
+```{r}
+lt.stat<-ddply(mf, "LT", summarise,
+      N=length(SOC), Mean = mean(SOC), SD = sd(SOC), Min=min(SOC),Max=max(SOC))
+lt.stat
+write.csv(lt.stat,"LT_STAT.csv")
+```
+
+#### Landtype: ANOVA 
+
+```{r}
+lt<-aov(SOC~LT, mf)
+summary(lt)
+```
+
+#### Landtype: LSD test
+
+```{r}
+LSD.test(lt, "LT",console=TRUE)
+```
+
+#### Landtype: Boxplot
+
+```{r}
+windows(width=7.5, height=5)
+tiff( file="FIG_BOX_PLOT_SOC_LT.tif", 
+width=7.5, height=5,units = "in", pointsize = 12, res=300, bg = "transparent",
+restoreConsole = TRUE)
+rgb.palette <- colorRampPalette(c("red","yellow","green", "blue", "skyblue"),
+space = "rgb")
+
+p=ggplot(mf, aes(y=SOC, x=LT)) +
+         geom_point(aes(colour=SOC),size = I(2.0),
+         position=position_jitter(width=0.05, height=0.05)) +
+         geom_boxplot(fill=NA, outlier.colour=NA) +
+         labs(title="")+
+         theme_bw() +
+         coord_flip()+
+            theme(axis.line = element_line(colour = "black"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.background = element_blank(),
+            axis.text.y=element_text(size=10),
+            axis.text.x = element_text(size=12))
+p1= p+scale_colour_gradientn(name="Soil OC \n(%)", colours =rgb.palette(20),na.value = "transparent")
+p2=p1 + theme(legend.text = element_text(size = 10),legend.title = element_text(size = 12))
+p2+ labs(y="Soil OC(%)", x = "")
+dev.off()
+p2+ labs(y="Soil OC(%)", x = "")
+```
+
+
+## Distribution of SOC in drainage class
+
+#### Driange: descriptive stat
+
+```{r}
+dc.stat<-ddply(mf, "DC", summarise,
+      N=length(SOC), Mean = mean(SOC), SD = sd(SOC), Min=min(SOC),Max=max(SOC))
+dc.stat
+write.csv(dc.stat,"DC_STAT.csv")
+```
+
+#### Drainage: ANOVA 
+
+```{r}
+dc<-aov(SOC~DC, mf)
+summary(dc)
+```
+
+#### Drainage: LSD test
+
+```{r}
+LSD.test(dc, "DC",console=TRUE)
+```
+
+#### Drainage: Boxplot
+
+```{r}
+windows(width=7.5, height=5)
+tiff( file="FIG_BOX_PLOT_SOC_DC.tif", 
+width=7.5, height=5,units = "in", pointsize = 12, res=300, bg = "transparent",
+restoreConsole = TRUE)
+rgb.palette <- colorRampPalette(c("red","yellow","green", "blue", "skyblue"),
+space = "rgb")
+
+p=ggplot(mf, aes(y=SOC, x=DC)) +
+         geom_point(aes(colour=SOC),size = I(2.0),
+         position=position_jitter(width=0.05, height=0.05)) +
+         geom_boxplot(fill=NA, outlier.colour=NA) +
+         labs(title="")+
+         theme_bw() +
+         coord_flip()+
+            theme(axis.line = element_line(colour = "black"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.background = element_blank(),
+            axis.text.y=element_text(size=10),
+            axis.text.x = element_text(size=12))
+p1= p+scale_colour_gradientn(name="Soil OC \n(%)", colours =rgb.palette(20),na.value = "transparent")
+p2=p1 + theme(legend.text = element_text(size = 10),legend.title = element_text(size = 12))
+p2+ labs(y="Soil OC(%)", x = "")
+dev.off()
+p2+ labs(y="Soil OC(%)", x = "")
+```
+
+
+
+## Distribution of SOC in Soil permeability
+
+#### Soil permeability: descriptive stat
+
+```{r}
+sp.stat<-ddply(mf, "SP", summarise,
+      N=length(SOC), Mean = mean(SOC), SD = sd(SOC), Min=min(SOC),Max=max(SOC))
+sp.stat
+write.csv (sp.stat,"SP_STAT.csv")
+```
+
+#### Soil permeability: ANOVA 
+
+```{r}
+sp<-aov(SOC~SP, mf)
+summary(sp)
+```
+
+#### Soil permeability: LSD test
+
+```{r}
+LSD.test(sp, "SP",console=TRUE)
+```
+
+#### Soil permeability: Boxplot
+
+```{r}
+windows(width=7.5, height=5)
+tiff( file="FIG_BOX_PLOT_SOC_SP.tif", 
+width=7.5, height=5,units = "in", pointsize = 12, res=300, bg = "transparent",
+restoreConsole = TRUE)
+rgb.palette <- colorRampPalette(c("red","yellow","green", "blue", "skyblue"),
+space = "rgb")
+
+p=ggplot(mf, aes(y=SOC, x=SP)) +
+         geom_point(aes(colour=SOC),size = I(2.0),
+         position=position_jitter(width=0.05, height=0.05)) +
+         geom_boxplot(fill=NA, outlier.colour=NA) +
+         labs(title="")+
+         theme_bw() +
+         coord_flip()+
+            theme(axis.line = element_line(colour = "black"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.background = element_blank(),
+            axis.text.y=element_text(size=10),
+            axis.text.x = element_text(size=12))
+p1= p+scale_colour_gradientn(name="Soil OC \n(%)", colours =rgb.palette(20),na.value = "transparent")
+p2=p1 + theme(legend.text = element_text(size = 10),legend.title = element_text(size = 12))
+p2+ labs(y="Soil OC(%)", x = "")
+dev.off()
+p2+ labs(y="Soil OC(%)", x = "")
+```
+
+## Distribution of SOC in diffrent landuse
+
+#### Landuse: descriptive stat
+
+```{r}
+lu.stat<-ddply(mf, "LU", summarise,
+      N=length(SOC), Mean = mean(SOC), SD = sd(SOC), Min=min(SOC),Max=max(SOC))
+lu.stat
+write.csv(lu.stat,"LU_STAT.csv")
+```
+
+#### Landuse: ANOVA 
+
+```{r}
+lu <- aov(SOC~LU, mf)
+summary(lu)
+```
+
+#### Landuse: LSD test
+
+```{r}
+LSD.test(lu, "LU",console=TRUE)
+```
+
+#### Soil permeability: Boxplot
+
+```{r}
+windows(width=7.5, height=5)
+tiff( file="FIG_BOX_PLOT_SOC_LU.tif", 
+width=7.5, height=5,units = "in", pointsize = 12, res=300, bg = "transparent",
+restoreConsole = TRUE)
+rgb.palette <- colorRampPalette(c("red","yellow","green", "blue", "skyblue"),
+space = "rgb")
+
+p=ggplot(mf, aes(y=SOC, x=LU)) +
+         geom_point(aes(colour=SOC),size = I(2.0),
+         position=position_jitter(width=0.05, height=0.05)) +
+         geom_boxplot(fill=NA, outlier.colour=NA) +
+         labs(title="")+
+         theme_bw() +
+         coord_flip()+
+            theme(axis.line = element_line(colour = "black"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.background = element_blank(),
+            axis.text.y=element_text(size=10),
+            axis.text.x = element_text(size=12))
+p1= p+scale_colour_gradientn(name="Soil OC \n(%)", colours =rgb.palette(20),na.value = "transparent")
+p2=p1 + theme(legend.text = element_text(size = 10),legend.title = element_text(size = 12))
+p2+ labs(y="Soil OC(%)", x = "")
+dev.off()
+p2+ labs(y="Soil OC(%)", x = "")
+```
+
+### Correlation between SOC and DEM
+
+```{r}
+summary (mf$DEM)
+cor.test(mf$SOC, mf$DEM)
+```
+
+### Correlation between SOC and NDVI
+
+```{r}
+summary (mf$NDVI)
+cor.test(mf$SOC, mf$NDVI)
+```
+

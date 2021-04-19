@@ -1,0 +1,89 @@
+---
+title: "Kriging Mapping"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+## Load packages
+
+```{r}
+library(plyr)
+library(dplyr)
+library(raster)
+library(plyr)
+library(ggplot2)
+library(maptools)
+library(gstat)
+library(RColorBrewer)
+library(classInt)
+library(latticeExtra)
+library(sp)
+```
+
+### Set working directory
+
+```{r}
+setwd("D:\\SOC_paper\\Data")
+```
+
+### Load data
+
+```{r}
+mf<-read.csv("GOPAL_SOIL.csv",header=TRUE)          # All data
+rfk<-raster("RFK_SOC_Prediction.tif")               # RFK SOC Prediction 
+ok<-raster("OK_SOC_Prediction.tif")                 # OK SOC Prediction
+bound<-readShapePoly("GOPAL_BD.shp")                # District boundary 
+```
+
+#### Define legends
+
+```{r}
+at.soc = classIntervals(mf$SOC, n = 20, style = "quantile")$brks
+round(quantile(mf$SOC, probs=seq(0,1, by=0.05)),1)
+```
+
+```{r}
+rgb.palette <- colorRampPalette(c("red","Orange","yellow","green","blue"),space = "rgb")
+polys<- list("sp.lines", as(bound, "SpatialLines"), col="light grey", lwd=.8,lty=1)
+```
+
+#### Random Forest Kriging Map
+
+```{r}
+rfk<-spplot(rfk, main = "",
+   at=at.soc,sp.layout=list(polys),
+   par.settings=list(axis.line=list(col="darkgrey",lwd=1)),
+   colorkey=list(space="right",height=1, width=1,at=1:21,labels=list(cex=1.3,at=1:21,
+   labels=c("" ,"", "<1.2", "" ,"", "1.7","", "", "" ,"", "2.6", "", "", "","", "4.7","","", ">7.8"," ", " "))),
+   col.regions=rgb.palette(100))
+
+windows(width=4.5, height=4.5)
+tiff( file="FIG_SOC_RFK.tif",
+height=4.5, width=4.5,units = "in",pointsize = 12, res=1600, 
+restoreConsole = T,compression =  "lzw",bg="transparent")
+print(rfk)
+dev.off()
+## png
+## 2
+```
+
+#### Ordinary Kriging Map
+
+```{r}
+ok<-spplot(ok, main = "",
+   at=at.soc,sp.layout=list(polys),
+   par.settings=list(axis.line=list(col="darkgrey",lwd=1)),
+   colorkey=list(space="right",height=1, width=1,at=1:21,labels=list(cex=1.3,at=1:21,
+   labels=c("" ,"", "<1.2", "" ,"", "1.7","", "", "" ,"", "2.6", "", "", "","", "4.7","","", ">7.8"," ", " "))),
+   col.regions=rgb.palette(100))
+
+windows(width=4.5, height=4.5)
+tiff( file="FIG_SOC_OK.tif",
+height=4.5, width=4.5,,units = "in",pointsize = 12, res=1600, 
+restoreConsole = T,compression =  "lzw",bg="transparent")
+print(ok)
+dev.off()
+```
+
