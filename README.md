@@ -10,12 +10,12 @@ R version 4.0.3 (2020-10-10) -- "Bunny-Wunnies Freak Out"
 Copyright (C) 2020 The R Foundation for Statistical Computing Platform: x86_64-w64-mingw32/x64 (64-bit)
 
 Packages: CRAN(Comprehensive R Archive Network)
-Program language: Default 
-Restore Workspace: Default
-Save Workspace: Default
-Always Save History: Default
-Enable Code Indexing: Yes
-Use Spaces For Tab: Yes
-Encoding: UTF-8
+Program language: Default, 
+Restore Workspace: Default,
+Save Workspace: Default,
+Always Save History: Default,
+Enable Code Indexing: Yes,
+Use Spaces For Tab: Yes,
+Encoding: UTF-8,
 
 The project can be reached at: jf1760@msstate.edu
